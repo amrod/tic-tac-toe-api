@@ -317,7 +317,7 @@ class TicTacToeApi(remote.Service):
                     ranking['wins'])
             else:
                 performance[score.winner] = {
-                    'name': score.winner.get_async(), 'wins': 1, 'losses': 0,
+                    'name': score.get_winner_name(), 'wins': 1, 'losses': 0,
                     'avg_moves': score.winner_moves}
 
             if score.loser in performance:
