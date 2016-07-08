@@ -1,0 +1,34 @@
+application: guess-a-number-1280
+version: 1
+runtime: python27
+api_version: 1
+threadsafe: yes
+
+builtins:
+- appstats: on
+
+handlers:
+- url: /_ah/spi/.*
+  script: tic_tac_toe.api
+  secure: always
+
+- url: /favicon\.ico
+  static_files: favicon.ico
+  upload: favicon\.ico
+
+- url: /tasks/cache_average_attempts
+  script: main.app
+
+- url: /crons/send_reminder
+  script: main.app
+
+libraries:
+- name: webapp2
+  version: "2.5.2"
+
+- name: endpoints
+  version: latest
+
+# pycrypto library used for OAuth2 (req'd for authenticated APIs)
+- name: pycrypto
+  version: latest
