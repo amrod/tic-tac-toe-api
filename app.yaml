@@ -16,6 +16,9 @@ handlers:
   static_files: favicon.ico
   upload: favicon\.ico
 
+- url: /tasks/notify_next_turn/\w+/\w+
+  script: main.app
+
 - url: /tasks/cache_average_attempts
   script: main.app
 

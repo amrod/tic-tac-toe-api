@@ -2,8 +2,7 @@
 entities used by the Game. Because these classes are also regular Python
 classes they can include methods (such as 'to_form' and 'new_game')."""
 
-import random
-from datetime import date
+from datetime import date, datetime
 from protorpc import messages
 from google.appengine.ext import ndb
 
@@ -12,6 +11,15 @@ class User(ndb.Model):
     """User profile"""
     name = ndb.StringProperty(required=True)
     email = ndb.StringProperty()
+
+
+class MoveHistory(ndb.Model):
+    """Structured game move history consisting of user and position."""
+    user_name = ndb.StringProperty()
+    position = ndb.IntegerProperty()
+
+    def to_form(self):
+        return MoveHistoryForm(player=self.user_name, position=self.position)
 
 
 class Game(ndb.Model):
@@ -30,13 +38,15 @@ class Game(ndb.Model):
      Each cell can have the possible values of -1 (empty),
      0 (O), or 1 (X).
 
-     player1 is automatically assigned Xs, player2 is Os.
+     player1 is automatically assigned 'X', player2 is 'O'.
     """
 
     game_over = ndb.BooleanProperty(required=True, default=False)
+    player1 = ndb.KeyProperty(required=True, kind='User')
     player2 = ndb.KeyProperty(required=False, kind='User')
     next_turn = ndb.KeyProperty(required=True, kind='User')
     winner = ndb.KeyProperty(required=False, kind='User')
+    last_move = ndb.DateTimeProperty(required=False)
     cancelled = ndb.BooleanProperty(required=False, default=False)
     cell_1 = ndb.IntegerProperty(required=False, default=-1)
     cell_2 = ndb.IntegerProperty(required=False, default=-1)
@@ -47,14 +57,11 @@ class Game(ndb.Model):
     cell_7 = ndb.IntegerProperty(required=False, default=-1)
     cell_8 = ndb.IntegerProperty(required=False, default=-1)
     cell_9 = ndb.IntegerProperty(required=False, default=-1)
-
-    @property
-    def player1(self):
-        return self.key.parent()
+    history = ndb.LocalStructuredProperty(MoveHistory, repeated=True)
 
     @property
     def grid(self):
-        """Returns the grid represented as a list of lists"""
+        """Returns the game grid represented as a list of lists"""
         l = [[], [], []]
         i = 1
         for j in range(3):
@@ -65,17 +72,22 @@ class Game(ndb.Model):
 
     @grid.setter
     def grid(self, grid_list):
-        """Store grid in database"""
+        """Store game grid in database"""
         i = 1
         for j in range(3):
             for k in range(3):
                 setattr(self, 'cell_{}'.format(i), grid_list[j][k])
                 i += 1
 
-    def cell_names(self):
+    @staticmethod
+    def _cell_names():
         for i in range(1, 10):
             attr_name = 'cell_{}'.format(i)
             yield attr_name
+
+    def _record_move_history(self, user, position):
+        move = MoveHistory(user_name=user.name, position=position)
+        self.history.append(move)
 
     def get_player_symbol(self, user_key):
         if self.player1 == user_key:
@@ -89,7 +101,7 @@ class Game(ndb.Model):
     def new_game(cls, player1_key, player2_key=None):
         """Creates and returns a new game"""
 
-        game = Game(parent=player1_key,
+        game = Game(player1=player1_key,
                     player2=player2_key,
                     next_turn=player1_key,
                     game_over=False)
@@ -100,10 +112,12 @@ class Game(ndb.Model):
         self.player2 = user_key
         self.put()
 
-    def set_position(self, position, user_key):
-        symbol = self.get_player_symbol(user_key)
+    def set_position(self, position, user):
+        symbol = self.get_player_symbol(user.key)
         attr_name = 'cell_{}'.format(position)
         setattr(self, attr_name, symbol)
+        self.last_move = datetime.now()
+        self._record_move_history(user, position)
 
     def cancel_game(self):
         self.cancelled = True
@@ -111,7 +125,7 @@ class Game(ndb.Model):
     def get_number_of_moves(self, user_key):
         symbol = self.get_player_symbol(user_key)
         total = 0
-        for attr_name in self.cell_names():
+        for attr_name in self._cell_names():
             if getattr(self, attr_name) == symbol:
                 total += 1
         return total
@@ -126,25 +140,34 @@ class Game(ndb.Model):
         form.message = message
         form.next_turn = self.next_turn.get().name
 
-        for attr_name in self.cell_names():
+        for attr_name in self._cell_names():
             setattr(form, attr_name, getattr(self, attr_name))
 
         return form
 
+    def get_history_forms(self):
+        return MoveHistoryForms(items=[event.to_form() for event in self.history])
+
     def end_game(self, winner):
         """Ends the game - if won is True, the player won. - if won is False,
         the player lost."""
+        futures = []
         self.game_over = True
         self.winner = winner
-        self.put()
-        loser = self.player2 if winner == self.player1 else self.player1
+        futures.append(self.put_async())
 
-        # Add the game to the score 'board'
+        if not winner:
+            loser = None
+        else:
+            loser = self.player2 if winner == self.player1 else self.player1
+
+        # Add the game to the 'score board'
         score = Score(parent=self.key, date=date.today(),
                       winner=winner, winner_name=winner.get().name,
                       loser=loser, loser_name=loser.get().name,
                       winner_moves=self.get_number_of_moves(winner))
-        score.put()
+        futures.append(score.put_async())
+        ndb.Future.wait_all(futures)
 
 
 class Score(ndb.Model):
@@ -157,12 +180,12 @@ class Score(ndb.Model):
     winner_moves = ndb.IntegerProperty(required=True)
 
     @ndb.tasklet
-    def get_winner_name(self):
+    def get_winner_name_future(self):
         user = yield self.winner.get_async()
         raise ndb.Return(user.name)
 
     @ndb.tasklet
-    def get_loser_name(self):
+    def get_loser_name_future(self):
         user = yield self.loser.get_async()
         raise ndb.Return(user.name)
 
@@ -174,6 +197,17 @@ class Score(ndb.Model):
     def to_form(self):
         return ScoreForm(user_name=self.winner_name,
                          date=str(self.date), moves=self.winner_moves)
+
+
+class MoveHistoryForm(messages.Message):
+    """Form for game history information"""
+    player = messages.StringField(1, required=True)
+    position = messages.IntegerField(2, required=True)
+
+
+class MoveHistoryForms(messages.Message):
+    """Form for game history information"""
+    items = messages.MessageField(MoveHistoryForm, 1, repeated=True)
 
 
 class GameForm(messages.Message):
@@ -200,10 +234,11 @@ class GameForms(messages.Message):
     items = messages.MessageField(GameForm, 1, repeated=True)
 
 
-class UserNameForm(messages.Message):
+class PlayersForm(messages.Message):
     """User name"""
     player_1 = messages.StringField(1, required=True)
     player_2 = messages.StringField(2, required=False)
+
 
 class MakeMoveForm(messages.Message):
     """Used to make a move in an existing game"""

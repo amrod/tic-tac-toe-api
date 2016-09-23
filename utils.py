@@ -1,8 +1,8 @@
 """utils.py - File for collecting general utility functions."""
 
-import logging
-from google.appengine.ext import ndb
 import endpoints
+from google.appengine.ext import ndb
+from google.appengine.api import mail, app_identity
 
 
 def get_by_urlsafe(urlsafe, model):
@@ -34,3 +34,15 @@ def get_by_urlsafe(urlsafe, model):
     if not isinstance(entity, model):
         raise ValueError('Incorrect Kind')
     return entity
+
+
+def send_turn_reminder_email(user, urlsafe_game_key):
+    app_id = app_identity.get_application_id()
+    subject = "It's your turn!"
+    body = ("Hello {}, \n\nIt's your turn to play! Following is your "
+            "game's key:\n\n{}".format(user.name, urlsafe_game_key))
+
+    mail.send_mail('noreply@{}.appspotmail.com'.format(app_id),
+                   user.email,
+                   subject,
+                   body)

@@ -5,37 +5,43 @@ cronjobs."""
 import logging
 
 import webapp2
-from google.appengine.api import mail, app_identity
+import datetime
+from google.appengine.api import app_identity
+from google.appengine.ext import ndb
 from tic_tac_toe import TicTacToeApi
+from utils import get_by_urlsafe, send_turn_reminder_email
 
-from models import User
+from models import User, Game
 
 
 class SendReminderEmail(webapp2.RequestHandler):
     def get(self):
-        """Send a reminder email to each User with an email about games.
-        Called every hour using a cron job"""
-        app_id = app_identity.get_application_id()
+        """
+        Send a reminder email to each User who has a pending for more than 12
+        hours. Called every hour using a cron job.
+        """
         users = User.query(User.email != None)
+        date = datetime.datetime.now()
+        query = Game.query(Game.last_move <= date - datetime.timedelta(minutes=12))
+        user_game = {game.next_turn: game
+                     for game in query}
+
         for user in users:
-            subject = 'This is a reminder!'
-            body = 'Hello {}, try out Guess A Number!'.format(user.name)
-            # This will send test emails, the arguments to send_mail are:
-            # from, to, subject, body
-            mail.send_mail('noreply@{}.appspotmail.com'.format(app_id),
-                           user.email,
-                           subject,
-                           body)
+            if user.key in user_game.keys():
+                send_turn_reminder_email(user, user_game[user.key].key.urlsafe())
 
 
-class UpdateAverageMovesRemaining(webapp2.RequestHandler):
-    def post(self):
-        """Update game listing announcement in memcache."""
-        TicTacToeApi._cache_average_attempts()
-        self.response.set_status(204)
+class SendNotificationNextPlayer(webapp2.RequestHandler):
+    def post(self, urlsafe_game_key, urlsafe_user_key):
+        """Send a notification to player to play next."""
+
+        user = get_by_urlsafe(urlsafe_user_key, User)
+
+        if user:
+            send_turn_reminder_email(user, urlsafe_game_key)
 
 
 app = webapp2.WSGIApplication([
     ('/crons/send_reminder', SendReminderEmail),
-    ('/tasks/cache_average_attempts', UpdateAverageMovesRemaining),
+    ('/tasks/notify_next_turn/(\w+)/(\w+)', SendNotificationNextPlayer),
 ], debug=True)
