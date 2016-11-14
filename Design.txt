@@ -1,0 +1,34 @@
+What additional properties did you add to your models and why?
+
+Game model:
+
+    * cell_1 - cell_9: These properties allow for a simple representation of the tic-tac-toe grid. Using helper
+    methods, these properties are transparently converted to and from a list representation for easier handling
+    in computations relating to determining the state of the game.
+
+    * player_1, player_2: There are the identities of the players. Two separate properties are used to
+    accommodate the two-player nature of the game.
+
+    * next_turn: Field added as simple way to track which player's turn it is to play next.
+
+    * winner: Useful to track which player won the game after it is over. In turn, we can also tell which player
+    lost using this information.
+
+    * history: Structured property encapsulating the move history. Included to meet the game history requirement.
+    It is composed of MoveHistory instances, which contain a user name and a position on the grid where the used
+    moved.
+
+What were some of the trade-offs or struggles you faced when implementing the new game logic?
+
+    The user rankings computation presented a particularly complex challenge. The most difficult aspect was
+    understanding the advantages and limitations of the DNB library and then designing the solution around it.
+    My goal was to leverage NDB Tasklets to run concurrent queries while iterating over every entry of the Score
+    table to generate the user rankings.
+
+    One trade-off made was whether to make each game a descendant of a User, which could have simplified the
+    implementation of get_user_games(), but would have limited the functionality to a single player. Choosing
+    not to link games to a single User in this manner was a more fitting representation for two-player games.
+
+    Another important design decision is the representation of TicTacToe cells as individual fields. Though
+    not as elegant as something like a Structured Property, it is much easier to understand and work with in
+    this scenario.
