@@ -2,13 +2,8 @@
 
 """main.py - This file contains handlers that are called by taskqueue and/or
 cronjobs."""
-import logging
-
 import webapp2
 import datetime
-from google.appengine.api import app_identity
-from google.appengine.ext import ndb
-from tic_tac_toe import TicTacToeApi
 from utils import get_by_urlsafe, send_turn_reminder_email
 
 from models import User, Game

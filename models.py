@@ -195,8 +195,9 @@ class Score(ndb.Model):
                                 cls.loser == user_key))
 
     def to_form(self):
-        return ScoreForm(user_name=self.winner_name,
-                         date=str(self.date), moves=self.winner_moves)
+        return ScoreForm(winner=self.winner_name,
+                         date=str(self.date),
+                         moves=self.winner_moves)
 
 
 class MoveHistoryForm(messages.Message):
@@ -248,7 +249,7 @@ class MakeMoveForm(messages.Message):
 
 class ScoreForm(messages.Message):
     """ScoreForm for outbound Score information"""
-    user_name = messages.StringField(1, required=True)
+    winner = messages.StringField(1, required=True)
     date = messages.StringField(2, required=True)
     moves = messages.IntegerField(3, required=True)
 

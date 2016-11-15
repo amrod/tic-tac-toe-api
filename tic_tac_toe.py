@@ -164,7 +164,10 @@ class TicTacToeApi(remote.Service):
     def get_game(self, request):
         """Return the current game state."""
         game = self._get_game(request.urlsafe_game_key)
-        return game.to_form('Time to make a move!')
+        if game.game_over:
+            return game.to_form('This game is alresdy over. Start a new game.')
+        else:
+            return game.to_form('Time to make a move!')
 
     @endpoints.method(request_message=MAKE_MOVE_REQUEST,
                       response_message=GameForm,
@@ -175,6 +178,9 @@ class TicTacToeApi(remote.Service):
         """Makes a move. Returns a game state with message"""
 
         game = self._get_game(request.urlsafe_game_key)
+
+        if game.game_over:
+            return game.to_form('Game already over.')
 
         if not game.player2:
             raise endpoints.NotFoundException('Waiting for player 2 to join.')
@@ -273,7 +279,8 @@ class TicTacToeApi(remote.Service):
         if not user:
             raise endpoints.NotFoundException(
                     'A User with that name does not exist!')
-        scores = Score.query(ancestor=user.key)
+        scores = Score.query(ndb.OR(Score.winner == user.key,
+                                    Score.loser == user.key))
         return ScoreForms(items=[score.to_form() for score in scores])
 
     @endpoints.method(request_message=GET_USER_GAMES_REQUEST,
@@ -288,7 +295,9 @@ class TicTacToeApi(remote.Service):
                 'A User with that name does not exist!')
 
         games = Game.query(
-            ndb.OR(Game.player1 == user.key, Game.player2 == user.key)).fetch()
+            ndb.OR(Game.player1 == user.key,
+                   Game.player2 == user.key)
+        ).filter(Game.game_over == False).fetch()
         if games:
             return GameForms(items=[game.to_form() for game in games])
         else:
@@ -307,9 +316,11 @@ class TicTacToeApi(remote.Service):
             raise endpoints.BadRequestException(
                 'Game cannot be cancelled because it is already over.')
         else:
-            game.cancel_game()
+            game.cancelled = True
+            game.game_over = True
+            game.put()
 
-        return StringMessage(message='Game cancelled.')
+            return StringMessage(message='Game cancelled.')
 
     @endpoints.method(request_message=message_types.VoidMessage,
                       response_message=RankingForms,
