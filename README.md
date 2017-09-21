@@ -1,4 +1,4 @@
-#Full Stack Nanodegree Game API Project
+# Full Stack Nanodegree Game API Project
 
 1) Instructions for playing the game.
 2) Detailed descriptions of each endpoint.
@@ -14,7 +14,7 @@ the number of moves made by the winner and the date in which the score was recor
 
 In this API implementation two independent players can compete against each other.
 
-##Endpoints Available:
+## Endpoints Available:
  - **create_user**
     - Path: 'user/create'
     - Method: POST
@@ -117,7 +117,7 @@ In this API implementation two independent players can compete against each othe
     - Description: Returns a move-by-move history of the given game. For each
     move made on the have, user name and position occupied if listed.
 
-##Models:
+## Models:
  - **User**
     - Stores unique user_name and (optional) email address.
 
@@ -130,7 +130,7 @@ In this API implementation two independent players can compete against each othe
 - **MoveHistory**
     - Records independent user moves. Used by Game model to store game history.
 
-##Forms Included:
+## Forms Included:
  - **GameForm**
     - Representation of a Game's state (urlsafe_key, game_over flag, message,
     player names, next_turn player, current cell position state).
